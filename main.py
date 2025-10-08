@@ -18,6 +18,8 @@ from games import (
     CakeThrowGame, MaritimeSOSGame
 )
 from quizzes import SpellingQuiz, ChoSeongQuiz
+from auth import AuthScreen
+from database import Database
 
 
 class TypingPracticeApp:
@@ -34,7 +36,11 @@ class TypingPracticeApp:
         self.title_font = font.Font(family="맑은 고딕", size=14, weight="bold")
         self.big_font = font.Font(family="맑은 고딕", size=16, weight="bold")
 
+        # 데이터베이스
+        self.db = Database()
+
         # 사용자 정보
+        self.user_id = None
         self.user_name = "손님"
         self.user_score = 0
 
@@ -42,7 +48,20 @@ class TypingPracticeApp:
         self.current_mode = None
         self.in_game = False  # 게임/연습 중인지 여부
 
-        # UI 생성
+        # 로그인 화면 표시
+        self.show_auth_screen()
+
+    def show_auth_screen(self):
+        """로그인/회원가입 화면 표시"""
+        AuthScreen(self.root, self.on_login_success)
+
+    def on_login_success(self, user_info):
+        """로그인 성공 시 호출되는 콜백"""
+        self.user_id = user_info.get('user_id')
+        self.user_name = user_info.get('username', '손님')
+        self.user_score = user_info.get('total_score', 0)
+
+        # 메인 UI 생성
         self.create_ui()
 
     def create_ui(self):
@@ -88,6 +107,22 @@ class TypingPracticeApp:
             bg='#87CEEB',
             fg='white'
         ).pack(side=tk.LEFT, expand=True)
+
+        # 로그아웃 버튼 (오른쪽)
+        if self.user_id is not None:  # 게스트가 아닌 경우에만 표시
+            logout_btn = tk.Button(
+                header_frame,
+                text='로그아웃',
+                command=self.logout,
+                bg='#E74C3C',
+                fg='white',
+                font=('맑은 고딕', 10, 'bold'),
+                relief=tk.RAISED,
+                borderwidth=2,
+                cursor='hand2',
+                width=10
+            )
+            logout_btn.pack(side=tk.RIGHT, padx=20)
 
         # 메인 콘텐츠 영역
         content_container = tk.Frame(self.main_container, bg='#E8F4F8')
@@ -454,6 +489,22 @@ class TypingPracticeApp:
 
     def start_choseong_quiz(self):
         self.start_mode(ChoSeongQuiz, '🔤 초성 퀴즈')
+
+    def logout(self):
+        """로그아웃"""
+        from tkinter import messagebox
+        if messagebox.askyesno("로그아웃", "로그아웃 하시겠습니까?"):
+            # 메인 컨테이너 제거
+            if hasattr(self, 'main_container'):
+                self.main_container.destroy()
+
+            # 사용자 정보 초기화
+            self.user_id = None
+            self.user_name = "손님"
+            self.user_score = 0
+
+            # 로그인 화면으로 이동
+            self.show_auth_screen()
 
 
 def main():
