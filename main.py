@@ -73,6 +73,202 @@ class TypingPracticeApp:
         # 시작 화면 표시
         self.show_start_menu()
 
+    def show_profile_dialog(self):
+        """프로필 정보 다이얼로그 표시"""
+        # 새 창 생성
+        profile_window = tk.Toplevel(self.root)
+        profile_window.title("프로필 정보")
+        profile_window.geometry("700x600")
+        profile_window.configure(bg='#E8F4F8')
+        profile_window.transient(self.root)  # 부모 창 위에 표시
+        profile_window.grab_set()  # 모달 다이얼로그로 설정
+
+        # 헤더
+        header_frame = tk.Frame(profile_window, bg='#3498DB', height=80)
+        header_frame.pack(fill=tk.X)
+        header_frame.pack_propagate(False)
+
+        tk.Label(
+            header_frame,
+            text='👤',
+            font=('맑은 고딕', 40),
+            bg='#3498DB'
+        ).pack(side=tk.LEFT, padx=20)
+
+        tk.Label(
+            header_frame,
+            text="프로필 정보",
+            font=('맑은 고딕', 20, 'bold'),
+            bg='#3498DB',
+            fg='white'
+        ).pack(side=tk.LEFT, pady=20)
+
+        # 메인 콘텐츠 스크롤 프레임
+        canvas = tk.Canvas(profile_window, bg='#E8F4F8', highlightthickness=0)
+        scrollbar = tk.Scrollbar(profile_window, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg='#E8F4F8')
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        # 사용자 정보 가져오기
+        if self.user_id:
+            user_info = self.db.get_user_info(self.user_id)
+            recent_records = self.db.get_user_records(self.user_id, limit=5)
+            high_scores = self.db.get_high_scores(self.user_id)
+        else:
+            user_info = None
+            recent_records = []
+            high_scores = []
+
+        # 기본 정보 섹션
+        info_frame = tk.Frame(scrollable_frame, bg='white', relief=tk.RAISED, borderwidth=3)
+        info_frame.pack(fill=tk.X, padx=20, pady=10)
+
+        tk.Label(
+            info_frame,
+            text="📋 기본 정보",
+            font=('맑은 고딕', 14, 'bold'),
+            bg='white',
+            fg='#2C3E50'
+        ).pack(anchor=tk.W, padx=15, pady=(10, 5))
+
+        if user_info:
+            info_items = [
+                ('사용자명', user_info.get('username', '손님')),
+                ('이메일', user_info.get('email', '미등록') or '미등록'),
+                ('총 점수', f"{user_info.get('total_score', 0):,}점"),
+                ('총 연습 시간', f"{user_info.get('total_practice_time', 0)}분"),
+                ('가입일', user_info.get('created_at', 'N/A')[:10] if user_info.get('created_at') else 'N/A'),
+                ('마지막 로그인', user_info.get('last_login', 'N/A')[:16] if user_info.get('last_login') else 'N/A')
+            ]
+        else:
+            info_items = [
+                ('사용자명', self.user_name),
+                ('총 점수', f"{self.user_score:,}점")
+            ]
+
+        for label, value in info_items:
+            item_frame = tk.Frame(info_frame, bg='white')
+            item_frame.pack(fill=tk.X, padx=15, pady=2)
+
+            tk.Label(
+                item_frame,
+                text=f"{label}:",
+                font=('맑은 고딕', 11),
+                bg='white',
+                fg='#7F8C8D',
+                width=15,
+                anchor=tk.W
+            ).pack(side=tk.LEFT)
+
+            tk.Label(
+                item_frame,
+                text=str(value),
+                font=('맑은 고딕', 11, 'bold'),
+                bg='white',
+                fg='#2C3E50'
+            ).pack(side=tk.LEFT, padx=10)
+
+        # 최고 기록 섹션
+        if high_scores:
+            high_score_frame = tk.Frame(scrollable_frame, bg='white', relief=tk.RAISED, borderwidth=3)
+            high_score_frame.pack(fill=tk.X, padx=20, pady=10)
+
+            tk.Label(
+                high_score_frame,
+                text="🏆 최고 기록",
+                font=('맑은 고딕', 14, 'bold'),
+                bg='white',
+                fg='#2C3E50'
+            ).pack(anchor=tk.W, padx=15, pady=(10, 5))
+
+            # 헤더
+            header = tk.Frame(high_score_frame, bg='#ECF0F1')
+            header.pack(fill=tk.X, padx=15, pady=(5, 0))
+
+            tk.Label(header, text="모드", font=('맑은 고딕', 10, 'bold'), bg='#ECF0F1', width=15, anchor=tk.W).pack(side=tk.LEFT, padx=5)
+            tk.Label(header, text="최고점수", font=('맑은 고딕', 10, 'bold'), bg='#ECF0F1', width=10).pack(side=tk.LEFT, padx=5)
+            tk.Label(header, text="최고정확도", font=('맑은 고딕', 10, 'bold'), bg='#ECF0F1', width=10).pack(side=tk.LEFT, padx=5)
+            tk.Label(header, text="최고속도", font=('맑은 고딕', 10, 'bold'), bg='#ECF0F1', width=10).pack(side=tk.LEFT, padx=5)
+
+            # 데이터
+            for i, record in enumerate(high_scores[:5]):
+                bg_color = '#F8F9FA' if i % 2 == 0 else 'white'
+                row = tk.Frame(high_score_frame, bg=bg_color)
+                row.pack(fill=tk.X, padx=15, pady=1)
+
+                tk.Label(row, text=record['mode_name'], font=('맑은 고딕', 9), bg=bg_color, width=15, anchor=tk.W).pack(side=tk.LEFT, padx=5)
+                tk.Label(row, text=f"{record['high_score']:,}", font=('맑은 고딕', 9), bg=bg_color, width=10).pack(side=tk.LEFT, padx=5)
+                tk.Label(row, text=f"{record['best_accuracy']:.1f}%", font=('맑은 고딕', 9), bg=bg_color, width=10).pack(side=tk.LEFT, padx=5)
+                tk.Label(row, text=f"{record['best_speed']}타/분", font=('맑은 고딕', 9), bg=bg_color, width=10).pack(side=tk.LEFT, padx=5)
+
+            tk.Label(high_score_frame, text="", bg='white').pack(pady=5)
+
+        # 최근 연습 기록 섹션
+        if recent_records:
+            recent_frame = tk.Frame(scrollable_frame, bg='white', relief=tk.RAISED, borderwidth=3)
+            recent_frame.pack(fill=tk.X, padx=20, pady=10)
+
+            tk.Label(
+                recent_frame,
+                text="📊 최근 연습 기록",
+                font=('맑은 고딕', 14, 'bold'),
+                bg='white',
+                fg='#2C3E50'
+            ).pack(anchor=tk.W, padx=15, pady=(10, 5))
+
+            # 헤더
+            header = tk.Frame(recent_frame, bg='#ECF0F1')
+            header.pack(fill=tk.X, padx=15, pady=(5, 0))
+
+            tk.Label(header, text="모드", font=('맑은 고딕', 10, 'bold'), bg='#ECF0F1', width=12, anchor=tk.W).pack(side=tk.LEFT, padx=5)
+            tk.Label(header, text="점수", font=('맑은 고딕', 10, 'bold'), bg='#ECF0F1', width=8).pack(side=tk.LEFT, padx=5)
+            tk.Label(header, text="정확도", font=('맑은 고딕', 10, 'bold'), bg='#ECF0F1', width=8).pack(side=tk.LEFT, padx=5)
+            tk.Label(header, text="속도", font=('맑은 고딕', 10, 'bold'), bg='#ECF0F1', width=8).pack(side=tk.LEFT, padx=5)
+            tk.Label(header, text="날짜", font=('맑은 고딕', 10, 'bold'), bg='#ECF0F1', width=10).pack(side=tk.LEFT, padx=5)
+
+            # 데이터
+            for i, record in enumerate(recent_records):
+                bg_color = '#F8F9FA' if i % 2 == 0 else 'white'
+                row = tk.Frame(recent_frame, bg=bg_color)
+                row.pack(fill=tk.X, padx=15, pady=1)
+
+                tk.Label(row, text=record['mode_name'], font=('맑은 고딕', 9), bg=bg_color, width=12, anchor=tk.W).pack(side=tk.LEFT, padx=5)
+                tk.Label(row, text=f"{record['score']:,}", font=('맑은 고딕', 9), bg=bg_color, width=8).pack(side=tk.LEFT, padx=5)
+                tk.Label(row, text=f"{record['accuracy']:.1f}%", font=('맑은 고딕', 9), bg=bg_color, width=8).pack(side=tk.LEFT, padx=5)
+                tk.Label(row, text=f"{record['speed']}타/분", font=('맑은 고딕', 9), bg=bg_color, width=8).pack(side=tk.LEFT, padx=5)
+                tk.Label(row, text=record['created_at'][:10], font=('맑은 고딕', 9), bg=bg_color, width=10).pack(side=tk.LEFT, padx=5)
+
+            tk.Label(recent_frame, text="", bg='white').pack(pady=5)
+
+        # 빈 공간 (스크롤을 위한)
+        tk.Label(scrollable_frame, text="", bg='#E8F4F8').pack(pady=10)
+
+        # 스크롤바 배치
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # 닫기 버튼
+        close_btn = tk.Button(
+            profile_window,
+            text="닫기",
+            command=profile_window.destroy,
+            bg='#E74C3C',
+            fg='white',
+            font=('맑은 고딕', 11, 'bold'),
+            relief=tk.RAISED,
+            borderwidth=2,
+            cursor='hand2',
+            width=15
+        )
+        close_btn.pack(pady=10)
+
     def show_start_menu(self):
         """시작 메뉴 화면"""
         # 기존 위젯 제거
@@ -87,17 +283,26 @@ class TypingPracticeApp:
         header_frame.pack_propagate(False)
 
         # 사용자 정보 (왼쪽)
-        user_frame = tk.Frame(header_frame, bg='white', relief=tk.RAISED, borderwidth=2)
+        user_frame = tk.Frame(header_frame, bg='white', relief=tk.RAISED, borderwidth=2, cursor='hand2')
         user_frame.pack(side=tk.LEFT, padx=20, pady=10)
+        # 프로필 클릭 이벤트 바인딩
+        user_frame.bind('<Button-1>', lambda e: self.show_profile_dialog())
 
-        user_icon = tk.Label(user_frame, text='👤', font=('맑은 고딕', 30), bg='white')
+        user_icon = tk.Label(user_frame, text='👤', font=('맑은 고딕', 30), bg='white', cursor='hand2')
         user_icon.pack(side=tk.LEFT, padx=10)
+        user_icon.bind('<Button-1>', lambda e: self.show_profile_dialog())
 
-        user_info_frame = tk.Frame(user_frame, bg='white')
+        user_info_frame = tk.Frame(user_frame, bg='white', cursor='hand2')
         user_info_frame.pack(side=tk.LEFT, padx=10)
+        user_info_frame.bind('<Button-1>', lambda e: self.show_profile_dialog())
 
-        tk.Label(user_info_frame, text=self.user_name, font=('맑은 고딕', 12, 'bold'), bg='white').pack(anchor=tk.W)
-        tk.Label(user_info_frame, text=f"{self.user_score}", font=('맑은 고딕', 14, 'bold'), bg='white', fg='#E67E22').pack(anchor=tk.W)
+        user_name_label = tk.Label(user_info_frame, text=self.user_name, font=('맑은 고딕', 12, 'bold'), bg='white', cursor='hand2')
+        user_name_label.pack(anchor=tk.W)
+        user_name_label.bind('<Button-1>', lambda e: self.show_profile_dialog())
+
+        user_score_label = tk.Label(user_info_frame, text=f"{self.user_score}", font=('맑은 고딕', 14, 'bold'), bg='white', fg='#E67E22', cursor='hand2')
+        user_score_label.pack(anchor=tk.W)
+        user_score_label.bind('<Button-1>', lambda e: self.show_profile_dialog())
 
         # 메인 타이틀 (중앙)
         tk.Label(
