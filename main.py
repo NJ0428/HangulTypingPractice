@@ -20,6 +20,14 @@ from games import (
 from quizzes import SpellingQuiz, ChoSeongQuiz
 from auth import AuthScreen
 from database import Database
+from features import (
+    LeaderboardWindow, AchievementsWindow, StatisticsWindow,
+    WeaknessAnalysisWindow, DailyGoalWidget
+)
+from advanced_features import (
+    ThemeManager, ThemeSelectorDialog, CustomPracticeMode,
+    TimeAttackMode, SoundManager
+)
 
 
 class TypingPracticeApp:
@@ -43,10 +51,17 @@ class TypingPracticeApp:
         self.user_id = None
         self.user_name = "손님"
         self.user_score = 0
+        self.login_streak = 0
 
         # 현재 모드
         self.current_mode = None
         self.in_game = False  # 게임/연습 중인지 여부
+
+        # 소리 관리자
+        self.sound_manager = SoundManager()
+
+        # 테마
+        self.current_theme = 'light'
 
         # 로그인 화면 표시
         self.show_auth_screen()
@@ -60,6 +75,31 @@ class TypingPracticeApp:
         self.user_id = user_info.get('user_id')
         self.user_name = user_info.get('username', '손님')
         self.user_score = user_info.get('total_score', 0)
+
+        # 로그인 스트릭 업데이트
+        if self.user_id:
+            self.db.update_login_streak(self.user_id)
+
+            # 업적 체크
+            unlocked = self.db.check_achievements(self.user_id)
+            if unlocked:
+                self.sound_manager.play_achievement_sound()
+                from tkinter import messagebox
+                messagebox.showinfo("업적 달성!", f"새로운 업적을 달성했습니다:\n" + "\n".join(unlocked))
+
+            # 테마 로드
+            self.current_theme = self.db.get_user_theme(self.user_id)
+
+            # 사용자 설정 로드
+            settings = self.db.get_user_settings(self.user_id)
+            if settings:
+                self.sound_manager.set_enabled(settings['sound_enabled'])
+                self.sound_manager.set_volume(settings['volume'])
+
+            # 스트릭 정보 가져오기
+            user_full_info = self.db.get_user_info(self.user_id)
+            if user_full_info:
+                self.login_streak = user_full_info.get('login_streak', 0)
 
         # 메인 UI 생성
         self.create_ui()
@@ -300,7 +340,12 @@ class TypingPracticeApp:
         user_name_label.pack(anchor=tk.W)
         user_name_label.bind('<Button-1>', lambda e: self.show_profile_dialog())
 
-        user_score_label = tk.Label(user_info_frame, text=f"{self.user_score}", font=('맑은 고딕', 14, 'bold'), bg='white', fg='#E67E22', cursor='hand2')
+        # 스트릭 표시
+        if self.login_streak > 0:
+            streak_text = f"🔥 {self.login_streak}일 연속"
+            user_score_label = tk.Label(user_info_frame, text=f"{self.user_score} | {streak_text}", font=('맑은 고딕', 11, 'bold'), bg='white', fg='#E67E22', cursor='hand2')
+        else:
+            user_score_label = tk.Label(user_info_frame, text=f"{self.user_score}", font=('맑은 고딕', 14, 'bold'), bg='white', fg='#E67E22', cursor='hand2')
         user_score_label.pack(anchor=tk.W)
         user_score_label.bind('<Button-1>', lambda e: self.show_profile_dialog())
 
@@ -333,8 +378,54 @@ class TypingPracticeApp:
         content_container = tk.Frame(self.main_container, bg='#E8F4F8')
         content_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
 
+        # 왼쪽: 일일 목표 & 기능 버튼
+        left_panel = tk.Frame(content_container, bg='#E8F4F8', width=250)
+        left_panel.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 10))
+        left_panel.pack_propagate(False)
+
+        # 일일 목표 위젯
+        if self.user_id:
+            daily_goal = DailyGoalWidget(left_panel, self.db, self.user_id)
+            daily_goal.pack(fill=tk.X, pady=(0, 10))
+
+        # 기능 버튼들
+        features_frame = tk.LabelFrame(left_panel, text="기능", font=('맑은 고딕', 11, 'bold'), bg='#E8F4F8')
+        features_frame.pack(fill=tk.X, pady=(0, 10))
+
+        feature_buttons = [
+            ('🏆 리더보드', self.show_leaderboard, '#F39C12'),
+            ('🎖️ 업적', self.show_achievements, '#9B59B6'),
+            ('📊 통계', self.show_statistics, '#16A085'),
+            ('🎯 약점 분석', self.show_weakness_analysis, '#E67E22'),
+            ('⏱️ 타임 어택', self.start_time_attack, '#E74C3C'),
+            ('📝 사용자 정의', self.start_custom_practice, '#8E44AD'),
+            ('🎨 테마 변경', self.show_theme_selector, '#3498DB'),
+            ('⚙️ 설정', self.show_settings, '#95A5A6'),
+        ]
+
+        for text, command, color in feature_buttons:
+            btn = tk.Button(
+                features_frame,
+                text=text,
+                command=command,
+                bg=color,
+                fg='white',
+                font=('맑은 고딕', 9, 'bold'),
+                relief=tk.RAISED,
+                borderwidth=2,
+                cursor='hand2',
+                width=22,
+                anchor=tk.W,
+                padx=10
+            )
+            btn.pack(fill=tk.X, padx=5, pady=2)
+
+        # 오른쪽: 기존 탭들
+        right_panel = tk.Frame(content_container, bg='#E8F4F8')
+        right_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
         # 탭 프레임
-        tab_frame = tk.Frame(content_container, bg='#E8F4F8')
+        tab_frame = tk.Frame(right_panel, bg='#E8F4F8')
         tab_frame.pack(fill=tk.X, pady=(0, 10))
 
         # 탭 버튼 스타일
@@ -364,7 +455,7 @@ class TypingPracticeApp:
             btn.pack(side=tk.LEFT, padx=2)
 
         # 콘텐츠 프레임 (모드별 설명 및 시작 버튼)
-        self.start_content_frame = tk.Frame(content_container, bg='white', relief=tk.RAISED, borderwidth=3)
+        self.start_content_frame = tk.Frame(right_panel, bg='white', relief=tk.RAISED, borderwidth=3)
         self.start_content_frame.pack(fill=tk.BOTH, expand=True)
 
         # 기본 탭 표시
@@ -707,9 +798,175 @@ class TypingPracticeApp:
             self.user_id = None
             self.user_name = "손님"
             self.user_score = 0
+            self.login_streak = 0
 
             # 로그인 화면으로 이동
             self.show_auth_screen()
+
+    # ========== 새 기능 메서드들 ==========
+    def show_leaderboard(self):
+        """리더보드 표시"""
+        LeaderboardWindow(self.root, self.db, self.user_id)
+
+    def show_achievements(self):
+        """업적 표시"""
+        if not self.user_id:
+            from tkinter import messagebox
+            messagebox.showwarning("알림", "로그인이 필요한 기능입니다.")
+            return
+        AchievementsWindow(self.root, self.db, self.user_id)
+
+    def show_statistics(self):
+        """통계 대시보드 표시"""
+        if not self.user_id:
+            from tkinter import messagebox
+            messagebox.showwarning("알림", "로그인이 필요한 기능입니다.")
+            return
+        StatisticsWindow(self.root, self.db, self.user_id)
+
+    def show_weakness_analysis(self):
+        """약점 분석 표시"""
+        if not self.user_id:
+            from tkinter import messagebox
+            messagebox.showwarning("알림", "로그인이 필요한 기능입니다.")
+            return
+        WeaknessAnalysisWindow(self.root, self.db, self.user_id)
+
+    def show_theme_selector(self):
+        """테마 선택기 표시"""
+        if not self.user_id:
+            from tkinter import messagebox
+            messagebox.showwarning("알림", "로그인이 필요한 기능입니다.")
+            return
+
+        def apply_theme_callback(theme_name):
+            self.current_theme = theme_name
+            # 테마 적용 (재시작 필요)
+            pass
+
+        ThemeSelectorDialog(self.root, self.db, self.user_id, apply_theme_callback)
+
+    def show_settings(self):
+        """설정 다이얼로그 표시"""
+        if not self.user_id:
+            from tkinter import messagebox
+            messagebox.showwarning("알림", "로그인이 필요한 기능입니다.")
+            return
+
+        # 설정 다이얼로그
+        dialog = tk.Toplevel(self.root)
+        dialog.title("설정")
+        dialog.geometry("400x300")
+        dialog.configure(bg='#E8F4F8')
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        tk.Label(
+            dialog,
+            text="⚙️ 설정",
+            font=('맑은 고딕', 16, 'bold'),
+            bg='#E8F4F8'
+        ).pack(pady=20)
+
+        # 소리 설정
+        sound_frame = tk.Frame(dialog, bg='#E8F4F8')
+        sound_frame.pack(pady=10)
+
+        tk.Label(sound_frame, text="소리 효과:", font=('맑은 고딕', 11), bg='#E8F4F8').pack(side=tk.LEFT, padx=10)
+
+        sound_var = tk.IntVar(value=1 if self.sound_manager.enabled else 0)
+
+        def toggle_sound():
+            enabled = sound_var.get() == 1
+            self.sound_manager.set_enabled(enabled)
+            self.db.update_user_settings(self.user_id, sound_enabled=enabled)
+            if enabled:
+                self.sound_manager.play_correct_sound()
+
+        tk.Checkbutton(
+            sound_frame,
+            text="활성화",
+            variable=sound_var,
+            command=toggle_sound,
+            bg='#E8F4F8',
+            font=('맑은 고딕', 10)
+        ).pack(side=tk.LEFT)
+
+        # 볼륨 설정
+        volume_frame = tk.Frame(dialog, bg='#E8F4F8')
+        volume_frame.pack(pady=10)
+
+        tk.Label(volume_frame, text="볼륨:", font=('맑은 고딕', 11), bg='#E8F4F8').pack(side=tk.LEFT, padx=10)
+
+        volume_scale = tk.Scale(
+            volume_frame,
+            from_=0,
+            to=100,
+            orient=tk.HORIZONTAL,
+            length=200,
+            bg='#E8F4F8'
+        )
+        volume_scale.set(self.sound_manager.volume)
+        volume_scale.pack(side=tk.LEFT)
+
+        def update_volume(val):
+            self.sound_manager.set_volume(int(val))
+            self.db.update_user_settings(self.user_id, volume=int(val))
+
+        volume_scale.config(command=update_volume)
+
+        # 닫기 버튼
+        ttk.Button(dialog, text="닫기", command=dialog.destroy).pack(pady=20)
+
+    def start_time_attack(self):
+        """타임 어택 모드 시작"""
+        self.start_mode(TimeAttackMode, '⏱️ 타임 어택')
+
+    def start_custom_practice(self):
+        """사용자 정의 연습 시작"""
+        if not self.user_id:
+            from tkinter import messagebox
+            messagebox.showwarning("알림", "로그인이 필요한 기능입니다.")
+            return
+
+        self.clear_main_container()
+        self.in_game = True
+
+        # 상단 헤더
+        header_frame = tk.Frame(self.main_container, bg='#2C3E50', height=60)
+        header_frame.pack(fill=tk.X, side=tk.TOP)
+        header_frame.pack_propagate(False)
+
+        # 뒤로가기 버튼
+        back_btn = tk.Button(
+            header_frame,
+            text='← 메인 메뉴로',
+            command=self.show_start_menu,
+            bg='#E74C3C',
+            fg='white',
+            font=('맑은 고딕', 11, 'bold'),
+            relief=tk.RAISED,
+            borderwidth=2,
+            cursor='hand2',
+            width=15
+        )
+        back_btn.pack(side=tk.LEFT, padx=20, pady=10)
+
+        # 모드 제목
+        tk.Label(
+            header_frame,
+            text='📝 사용자 정의 연습',
+            font=('맑은 고딕', 18, 'bold'),
+            bg='#2C3E50',
+            fg='white'
+        ).pack(side=tk.LEFT, expand=True)
+
+        # 콘텐츠 프레임
+        content_frame = tk.Frame(self.main_container, bg='#ECF0F1')
+        content_frame.pack(fill=tk.BOTH, expand=True)
+
+        # 모드 인스턴스 생성
+        self.current_mode = CustomPracticeMode(content_frame, self.db, self.user_id)
 
 
 def main():
