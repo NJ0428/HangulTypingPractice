@@ -143,6 +143,89 @@ class Database:
             )
         ''')
 
+        # 레벨 시스템 테이블
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_levels (
+                level_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                current_level INTEGER DEFAULT 1,
+                current_exp INTEGER DEFAULT 0,
+                total_exp INTEGER DEFAULT 0,
+                FOREIGN KEY (user_id) REFERENCES users (user_id),
+                UNIQUE(user_id)
+            )
+        ''')
+
+        # 친구 시스템 테이블
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS friendships (
+                friendship_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                friend_id INTEGER NOT NULL,
+                status TEXT DEFAULT 'pending',
+                requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                accepted_at TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users (user_id),
+                FOREIGN KEY (friend_id) REFERENCES users (user_id),
+                UNIQUE(user_id, friend_id)
+            )
+        ''')
+
+        # 클랜/그룹 시스템 테이블
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS clans (
+                clan_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                clan_name TEXT UNIQUE NOT NULL,
+                description TEXT,
+                leader_id INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                total_members INTEGER DEFAULT 1,
+                FOREIGN KEY (leader_id) REFERENCES users (user_id)
+            )
+        ''')
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS clan_members (
+                member_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                clan_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                role TEXT DEFAULT 'member',
+                joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                contribution INTEGER DEFAULT 0,
+                FOREIGN KEY (clan_id) REFERENCES clans (clan_id),
+                FOREIGN KEY (user_id) REFERENCES users (user_id),
+                UNIQUE(user_id)
+            )
+        ''')
+
+        # 시즌 패스 테이블
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS season_pass (
+                pass_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                season_number INTEGER NOT NULL,
+                tier INTEGER DEFAULT 0,
+                season_exp INTEGER DEFAULT 0,
+                is_premium INTEGER DEFAULT 0,
+                FOREIGN KEY (user_id) REFERENCES users (user_id),
+                UNIQUE(user_id, season_number)
+            )
+        ''')
+
+        # 손가락별 통계 테이블
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS finger_statistics (
+                stat_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                finger_name TEXT NOT NULL,
+                total_presses INTEGER DEFAULT 0,
+                correct_presses INTEGER DEFAULT 0,
+                avg_speed REAL DEFAULT 0,
+                FOREIGN KEY (user_id) REFERENCES users (user_id),
+                UNIQUE(user_id, finger_name)
+            )
+        ''')
+
         conn.commit()
         conn.close()
 
@@ -781,6 +864,358 @@ class Database:
             WHERE user_id = ?
             GROUP BY mode_name
             ORDER BY count DESC
+        ''', (user_id,))
+
+        records = cursor.fetchall()
+        conn.close()
+
+        return [dict(record) for record in records]
+
+    # ========== 레벨 시스템 ==========
+    def get_user_level(self, user_id):
+        """사용자 레벨 정보 조회"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT current_level, current_exp, total_exp
+            FROM user_levels
+            WHERE user_id = ?
+        ''', (user_id,))
+
+        result = cursor.fetchone()
+
+        if not result:
+            # 레벨 정보가 없으면 생성
+            cursor.execute('''
+                INSERT INTO user_levels (user_id, current_level, current_exp, total_exp)
+                VALUES (?, 1, 0, 0)
+            ''', (user_id,))
+            conn.commit()
+
+            cursor.execute('''
+                SELECT current_level, current_exp, total_exp
+                FROM user_levels
+                WHERE user_id = ?
+            ''', (user_id,))
+            result = cursor.fetchone()
+
+        conn.close()
+        return dict(result) if result else None
+
+    def add_exp(self, user_id, exp_amount):
+        """경험치 추가 및 레벨업 처리"""
+        level_info = self.get_user_level(user_id)
+        if not level_info:
+            return None
+
+        current_level = level_info['current_level']
+        current_exp = level_info['current_exp']
+        total_exp = level_info['total_exp']
+
+        new_current_exp = current_exp + exp_amount
+        new_total_exp = total_exp + exp_amount
+
+        # 레벨업 계산 (각 레벨당 필요 경험치: level * 100)
+        leveled_up = False
+        new_level = current_level
+
+        while new_current_exp >= new_level * 100:
+            new_current_exp -= new_level * 100
+            new_level += 1
+            leveled_up = True
+
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            UPDATE user_levels
+            SET current_level = ?, current_exp = ?, total_exp = ?
+            WHERE user_id = ?
+        ''', (new_level, new_current_exp, new_total_exp, user_id))
+
+        conn.commit()
+        conn.close()
+
+        return {
+            'leveled_up': leveled_up,
+            'new_level': new_level,
+            'new_exp': new_current_exp,
+            'total_exp': new_total_exp
+        }
+
+    def get_level_leaderboard(self, limit=10):
+        """레벨 리더보드"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT u.username, l.current_level, l.total_exp
+            FROM user_levels l
+            JOIN users u ON l.user_id = u.user_id
+            ORDER BY l.current_level DESC, l.total_exp DESC
+            LIMIT ?
+        ''', (limit,))
+
+        records = cursor.fetchall()
+        conn.close()
+
+        return [dict(record) for record in records]
+
+    # ========== 친구 시스템 ==========
+    def send_friend_request(self, user_id, friend_username):
+        """친구 요청 보내기"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        # 친구 ID 찾기
+        cursor.execute('SELECT user_id FROM users WHERE username = ?', (friend_username,))
+        friend = cursor.fetchone()
+
+        if not friend:
+            conn.close()
+            return False, "사용자를 찾을 수 없습니다."
+
+        friend_id = friend['user_id']
+
+        if friend_id == user_id:
+            conn.close()
+            return False, "자기 자신에게 친구 요청을 보낼 수 없습니다."
+
+        try:
+            cursor.execute('''
+                INSERT INTO friendships (user_id, friend_id, status)
+                VALUES (?, ?, 'pending')
+            ''', (user_id, friend_id))
+            conn.commit()
+            conn.close()
+            return True, "친구 요청을 보냈습니다."
+        except sqlite3.IntegrityError:
+            conn.close()
+            return False, "이미 친구 요청을 보냈거나 친구입니다."
+
+    def accept_friend_request(self, user_id, friend_id):
+        """친구 요청 수락"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            UPDATE friendships
+            SET status = 'accepted', accepted_at = CURRENT_TIMESTAMP
+            WHERE friend_id = ? AND user_id = ? AND status = 'pending'
+        ''', (user_id, friend_id))
+
+        # 양방향 친구 관계 생성
+        try:
+            cursor.execute('''
+                INSERT INTO friendships (user_id, friend_id, status, accepted_at)
+                VALUES (?, ?, 'accepted', CURRENT_TIMESTAMP)
+            ''', (user_id, friend_id))
+        except:
+            pass
+
+        conn.commit()
+        conn.close()
+
+    def get_friends(self, user_id):
+        """친구 목록 조회"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT u.user_id, u.username, u.total_score, f.accepted_at
+            FROM friendships f
+            JOIN users u ON f.friend_id = u.user_id
+            WHERE f.user_id = ? AND f.status = 'accepted'
+            ORDER BY f.accepted_at DESC
+        ''', (user_id,))
+
+        records = cursor.fetchall()
+        conn.close()
+
+        return [dict(record) for record in records]
+
+    def get_friend_requests(self, user_id):
+        """받은 친구 요청 목록"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT u.user_id, u.username, u.total_score, f.requested_at
+            FROM friendships f
+            JOIN users u ON f.user_id = u.user_id
+            WHERE f.friend_id = ? AND f.status = 'pending'
+            ORDER BY f.requested_at DESC
+        ''', (user_id,))
+
+        records = cursor.fetchall()
+        conn.close()
+
+        return [dict(record) for record in records]
+
+    # ========== 클랜 시스템 ==========
+    def create_clan(self, clan_name, description, leader_id):
+        """클랜 생성"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+
+            cursor.execute('''
+                INSERT INTO clans (clan_name, description, leader_id)
+                VALUES (?, ?, ?)
+            ''', (clan_name, description, leader_id))
+
+            clan_id = cursor.lastrowid
+
+            # 리더를 멤버로 추가
+            cursor.execute('''
+                INSERT INTO clan_members (clan_id, user_id, role)
+                VALUES (?, ?, 'leader')
+            ''', (clan_id, leader_id))
+
+            conn.commit()
+            conn.close()
+            return True, clan_id
+        except sqlite3.IntegrityError:
+            return False, "이미 존재하는 클랜 이름이거나 이미 클랜에 소속되어 있습니다."
+
+    def join_clan(self, clan_id, user_id):
+        """클랜 가입"""
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+
+            cursor.execute('''
+                INSERT INTO clan_members (clan_id, user_id, role)
+                VALUES (?, ?, 'member')
+            ''', (clan_id, user_id))
+
+            cursor.execute('''
+                UPDATE clans
+                SET total_members = total_members + 1
+                WHERE clan_id = ?
+            ''', (clan_id,))
+
+            conn.commit()
+            conn.close()
+            return True
+        except sqlite3.IntegrityError:
+            return False
+
+    def get_user_clan(self, user_id):
+        """사용자가 속한 클랜 정보"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT c.clan_id, c.clan_name, c.description, c.total_members,
+                   cm.role, cm.contribution
+            FROM clan_members cm
+            JOIN clans c ON cm.clan_id = c.clan_id
+            WHERE cm.user_id = ?
+        ''', (user_id,))
+
+        result = cursor.fetchone()
+        conn.close()
+
+        return dict(result) if result else None
+
+    def get_clan_members(self, clan_id):
+        """클랜 멤버 목록"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT u.username, cm.role, cm.contribution, cm.joined_at
+            FROM clan_members cm
+            JOIN users u ON cm.user_id = u.user_id
+            WHERE cm.clan_id = ?
+            ORDER BY cm.contribution DESC
+        ''', (clan_id,))
+
+        records = cursor.fetchall()
+        conn.close()
+
+        return [dict(record) for record in records]
+
+    # ========== 시즌 패스 ==========
+    def get_season_pass(self, user_id, season_number=1):
+        """시즌 패스 정보 조회"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT tier, season_exp, is_premium
+            FROM season_pass
+            WHERE user_id = ? AND season_number = ?
+        ''', (user_id, season_number))
+
+        result = cursor.fetchone()
+
+        if not result:
+            # 시즌 패스 정보가 없으면 생성
+            cursor.execute('''
+                INSERT INTO season_pass (user_id, season_number, tier, season_exp)
+                VALUES (?, ?, 0, 0)
+            ''', (user_id, season_number))
+            conn.commit()
+
+            cursor.execute('''
+                SELECT tier, season_exp, is_premium
+                FROM season_pass
+                WHERE user_id = ? AND season_number = ?
+            ''', (user_id, season_number))
+            result = cursor.fetchone()
+
+        conn.close()
+        return dict(result) if result else None
+
+    def add_season_exp(self, user_id, exp_amount, season_number=1):
+        """시즌 경험치 추가"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            UPDATE season_pass
+            SET season_exp = season_exp + ?,
+                tier = (season_exp + ?) / 100
+            WHERE user_id = ? AND season_number = ?
+        ''', (exp_amount, exp_amount, user_id, season_number))
+
+        conn.commit()
+        conn.close()
+
+    # ========== 손가락별 통계 ==========
+    def update_finger_stat(self, user_id, finger_name, is_correct, press_time=0):
+        """손가락별 통계 업데이트"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            INSERT INTO finger_statistics (user_id, finger_name, total_presses, correct_presses, avg_speed)
+            VALUES (?, ?, 1, ?, ?)
+            ON CONFLICT(user_id, finger_name)
+            DO UPDATE SET
+                total_presses = total_presses + 1,
+                correct_presses = correct_presses + ?,
+                avg_speed = (avg_speed * total_presses + ?) / (total_presses + 1)
+        ''', (user_id, finger_name, 1 if is_correct else 0, press_time,
+              1 if is_correct else 0, press_time))
+
+        conn.commit()
+        conn.close()
+
+    def get_finger_statistics(self, user_id):
+        """손가락별 통계 조회"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT finger_name, total_presses, correct_presses, avg_speed,
+                   ROUND(100.0 * correct_presses / total_presses, 2) as accuracy
+            FROM finger_statistics
+            WHERE user_id = ?
+            ORDER BY total_presses DESC
         ''', (user_id,))
 
         records = cursor.fetchall()
