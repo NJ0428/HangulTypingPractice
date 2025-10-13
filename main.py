@@ -72,40 +72,71 @@ class TypingPracticeApp:
 
     def on_login_success(self, user_info):
         """로그인 성공 시 호출되는 콜백"""
-        self.user_id = user_info.get('user_id')
-        self.user_name = user_info.get('username', '손님')
-        self.user_score = user_info.get('total_score', 0)
+        try:
+            self.user_id = user_info.get('user_id')
+            self.user_name = user_info.get('username', '손님')
+            self.user_score = user_info.get('total_score', 0)
 
-        # 로그인 스트릭 업데이트
-        if self.user_id:
-            self.db.update_login_streak(self.user_id)
+            # 로그인 스트릭 업데이트
+            if self.user_id:
+                try:
+                    self.db.update_login_streak(self.user_id)
+                except Exception as e:
+                    print(f"로그인 스트릭 업데이트 오류: {e}")
 
-            # 업적 체크
-            unlocked = self.db.check_achievements(self.user_id)
-            if unlocked:
-                self.sound_manager.play_achievement_sound()
-                from tkinter import messagebox
-                messagebox.showinfo("업적 달성!", f"새로운 업적을 달성했습니다:\n" + "\n".join(unlocked))
+                # 업적 체크
+                try:
+                    unlocked = self.db.check_achievements(self.user_id)
+                    if unlocked:
+                        self.sound_manager.play_achievement_sound()
+                        from tkinter import messagebox
+                        messagebox.showinfo("업적 달성!", f"새로운 업적을 달성했습니다:\n" + "\n".join(unlocked))
+                except Exception as e:
+                    print(f"업적 체크 오류: {e}")
 
-            # 테마 로드
-            self.current_theme = self.db.get_user_theme(self.user_id)
+                # 테마 로드
+                try:
+                    self.current_theme = self.db.get_user_theme(self.user_id)
+                except Exception as e:
+                    print(f"테마 로드 오류: {e}")
+                    self.current_theme = 'light'
 
-            # 사용자 설정 로드
-            settings = self.db.get_user_settings(self.user_id)
-            if settings:
-                self.sound_manager.set_enabled(settings['sound_enabled'])
-                self.sound_manager.set_volume(settings['volume'])
+                # 사용자 설정 로드
+                try:
+                    settings = self.db.get_user_settings(self.user_id)
+                    if settings:
+                        self.sound_manager.set_enabled(settings['sound_enabled'])
+                        self.sound_manager.set_volume(settings['volume'])
+                except Exception as e:
+                    print(f"사용자 설정 로드 오류: {e}")
 
-            # 스트릭 정보 가져오기
-            user_full_info = self.db.get_user_info(self.user_id)
-            if user_full_info:
-                self.login_streak = user_full_info.get('login_streak', 0)
+                # 스트릭 정보 가져오기
+                try:
+                    user_full_info = self.db.get_user_info(self.user_id)
+                    if user_full_info:
+                        self.login_streak = user_full_info.get('login_streak', 0)
+                except Exception as e:
+                    print(f"스트릭 정보 가져오기 오류: {e}")
 
-        # 메인 UI 생성
-        self.create_ui()
+        except Exception as e:
+            print(f"로그인 성공 처리 중 오류: {e}")
+            from tkinter import messagebox
+            messagebox.showerror("오류", f"로그인 처리 중 오류가 발생했습니다:\n{e}")
+
+        # 메인 UI 생성 (오류가 발생해도 반드시 실행)
+        try:
+            self.create_ui()
+        except Exception as e:
+            print(f"UI 생성 오류: {e}")
+            from tkinter import messagebox
+            messagebox.showerror("오류", f"UI 생성 중 오류가 발생했습니다:\n{e}")
 
     def create_ui(self):
         """UI 구성"""
+        # 기존 위젯 모두 제거
+        for widget in self.root.winfo_children():
+            widget.destroy()
+
         # 메인 컨테이너
         self.main_container = tk.Frame(self.root, bg='#E8F4F8')
         self.main_container.pack(fill=tk.BOTH, expand=True)
