@@ -28,6 +28,17 @@ from advanced_features import (
     ThemeManager, ThemeSelectorDialog, CustomPracticeMode,
     TimeAttackMode, SoundManager
 )
+# 새로운 확장 기능 임포트
+from extended_features import (
+    ProgrammingTypingMode, BattleRoyaleGame, RPGStoryMode
+)
+from social_features import (
+    FriendsWindow, ClanWindow, ReportWindow
+)
+from additional_features import (
+    TutorialSystem, LanguagePracticeMode, SeasonPassWindow,
+    DailyTipWidget, UICustomizer
+)
 
 
 class TypingPracticeApp:
@@ -430,7 +441,17 @@ class TypingPracticeApp:
             ('🎯 약점 분석', self.show_weakness_analysis, '#E67E22'),
             ('⏱️ 타임 어택', self.start_time_attack, '#E74C3C'),
             ('📝 사용자 정의', self.start_custom_practice, '#8E44AD'),
+            ('💻 코딩 연습', self.start_programming_mode, '#2C3E50'),
+            ('🌍 외국어', self.start_language_practice, '#16A085'),
+            ('⚔️ 배틀 로얄', self.start_battle_royale, '#E74C3C'),
+            ('🐉 RPG 모드', self.start_rpg_mode, '#8E44AD'),
+            ('👥 친구', self.show_friends, '#3498DB'),
+            ('🛡️ 클랜', self.show_clan, '#9B59B6'),
+            ('🎁 시즌 패스', self.show_season_pass, '#F39C12'),
+            ('📚 튜토리얼', self.show_tutorial, '#E67E22'),
+            ('📈 리포트', self.show_report, '#16A085'),
             ('🎨 테마 변경', self.show_theme_selector, '#3498DB'),
+            ('🎨 UI 커스텀', self.show_ui_customizer, '#9B59B6'),
             ('⚙️ 설정', self.show_settings, '#95A5A6'),
         ]
 
@@ -998,6 +1019,104 @@ class TypingPracticeApp:
 
         # 모드 인스턴스 생성
         self.current_mode = CustomPracticeMode(content_frame, self.db, self.user_id)
+
+    # ========== 새로운 확장 기능 메서드들 ==========
+    def start_programming_mode(self):
+        """프로그래밍 코드 타이핑 모드 시작"""
+        self.clear_main_container()
+        self.in_game = True
+
+        # 상단 헤더
+        header_frame = tk.Frame(self.main_container, bg='#2C3E50', height=60)
+        header_frame.pack(fill=tk.X, side=tk.TOP)
+        header_frame.pack_propagate(False)
+
+        # 뒤로가기 버튼
+        back_btn = tk.Button(
+            header_frame,
+            text='← 메인 메뉴로',
+            command=self.show_start_menu,
+            bg='#E74C3C',
+            fg='white',
+            font=('맑은 고딕', 11, 'bold'),
+            relief=tk.RAISED,
+            borderwidth=2,
+            cursor='hand2',
+            width=15
+        )
+        back_btn.pack(side=tk.LEFT, padx=20, pady=10)
+
+        # 모드 제목
+        tk.Label(
+            header_frame,
+            text='💻 프로그래밍 코드 타이핑',
+            font=('맑은 고딕', 18, 'bold'),
+            bg='#2C3E50',
+            fg='white'
+        ).pack(side=tk.LEFT, expand=True)
+
+        # 콘텐츠 프레임
+        content_frame = tk.Frame(self.main_container, bg='#ECF0F1')
+        content_frame.pack(fill=tk.BOTH, expand=True)
+
+        # 모드 인스턴스 생성
+        self.current_mode = ProgrammingTypingMode(content_frame, self.db, self.user_id)
+
+    def start_language_practice(self):
+        """외국어 타이핑 연습 시작"""
+        self.start_mode(LanguagePracticeMode, '🌍 외국어 타이핑')
+
+    def start_battle_royale(self):
+        """배틀 로얄 게임 시작"""
+        self.start_mode(BattleRoyaleGame, '⚔️ 배틀 로얄')
+
+    def start_rpg_mode(self):
+        """RPG 스토리 모드 시작"""
+        self.start_mode(RPGStoryMode, '🐉 RPG 스토리 모드')
+
+    def show_friends(self):
+        """친구 시스템 표시"""
+        if not self.user_id:
+            from tkinter import messagebox
+            messagebox.showwarning("알림", "로그인이 필요한 기능입니다.")
+            return
+        FriendsWindow(self.root, self.db, self.user_id)
+
+    def show_clan(self):
+        """클랜 시스템 표시"""
+        if not self.user_id:
+            from tkinter import messagebox
+            messagebox.showwarning("알림", "로그인이 필요한 기능입니다.")
+            return
+        ClanWindow(self.root, self.db, self.user_id)
+
+    def show_season_pass(self):
+        """시즌 패스 표시"""
+        if not self.user_id:
+            from tkinter import messagebox
+            messagebox.showwarning("알림", "로그인이 필요한 기능입니다.")
+            return
+        SeasonPassWindow(self.root, self.db, self.user_id)
+
+    def show_tutorial(self):
+        """튜토리얼 표시"""
+        TutorialSystem(self.root)
+
+    def show_report(self):
+        """리포트 표시"""
+        if not self.user_id:
+            from tkinter import messagebox
+            messagebox.showwarning("알림", "로그인이 필요한 기능입니다.")
+            return
+        ReportWindow(self.root, self.db, self.user_id)
+
+    def show_ui_customizer(self):
+        """UI 커스터마이저 표시"""
+        if not self.user_id:
+            from tkinter import messagebox
+            messagebox.showwarning("알림", "로그인이 필요한 기능입니다.")
+            return
+        UICustomizer(self.root, self.db, self.user_id)
 
 
 def main():
