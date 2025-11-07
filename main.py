@@ -391,15 +391,6 @@ class TypingPracticeApp:
         user_score_label.pack(anchor=tk.W)
         user_score_label.bind('<Button-1>', lambda e: self.show_profile_dialog())
 
-        # 메인 타이틀 (중앙)
-        tk.Label(
-            header_frame,
-            text="⌨️ 한글/영어 타자 연습 ⌨️",
-            font=('맑은 고딕', 20, 'bold'),
-            bg='#87CEEB',
-            fg='white'
-        ).pack(side=tk.LEFT, expand=True)
-
         # 로그아웃 버튼 (오른쪽)
         if self.user_id is not None:  # 게스트가 아닌 경우에만 표시
             logout_btn = tk.Button(
@@ -415,6 +406,15 @@ class TypingPracticeApp:
                 width=10
             )
             logout_btn.pack(side=tk.RIGHT, padx=20)
+
+        # 메인 타이틀 (중앙)
+        tk.Label(
+            header_frame,
+            text="⌨️ 한글/영어 타자 연습 ⌨️",
+            font=('맑은 고딕', 20, 'bold'),
+            bg='#87CEEB',
+            fg='white'
+        ).pack(expand=True)
 
         # 메인 콘텐츠 영역
         content_container = tk.Frame(self.main_container, bg='#E8F4F8')
@@ -474,7 +474,7 @@ class TypingPracticeApp:
 
         # 오른쪽: 기존 탭들
         right_panel = tk.Frame(content_container, bg='#E8F4F8')
-        right_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        right_panel.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
         # 탭 프레임
         tab_frame = tk.Frame(right_panel, bg='#E8F4F8')
