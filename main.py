@@ -46,7 +46,7 @@ class TypingPracticeApp:
 
     def __init__(self, root):
         self.root = root
-        self.root.title("한글/영어 타자 연습")
+        self.root.title("NAK 타자 연습")
         self.root.geometry("1200x800")
         self.root.configure(bg='#E8F4F8')
 

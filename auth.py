@@ -51,7 +51,7 @@ class AuthScreen:
 
         tk.Label(
             title_frame,
-            text="한글/영어 타자 연습",
+            text="NAK 타자 연습",
             font=self.title_font,
             bg='#3498DB',
             fg='white'
